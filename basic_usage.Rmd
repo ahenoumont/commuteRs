@@ -1,0 +1,85 @@
+---
+title: "Getting Started With Commuter Flows"
+author: "Alex Henoumont"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# CommuteRs Package
+
+## Overview
+
+The goal of commuteRs is to help analysts to study the journey to work for labor market in the United States. Some of the tools in this package aim to:  
+  * Retrieve commuter flow data from the US Census LEHD Origin-Destination Employment Statistics Program  
+  * Retrieve labor market statistics from The BLS Quarterly Census Earnings and Wages Program  
+  * Clean up some of the data in a usable format  
+  * Build API get and post requests from Mapquest, Google Directions, and TollGuru API  
+  * Perform spatial analysis  
+  * Preprocess data before modeling  
+  * Model gravity equations for analysis  
+
+
+
+## Prerequisites
+
+To get started working with `commuteRs`, users should load the package along with the `tidyverse` package.  
+
+```{r, echo=FALSE}
+library(commuteRs)
+library(tidyverse)
+```
+
+## Retrieving Scope of Analysis
+
+For analysis of metropolitan area at the county level. `commuteRs` provides the `us_xwalk` dataset to quickly lookup counties of all US statisical areas. 
+
+```{r}
+data("us_xwalk")
+```
+
+After loading the data, counties can be found by filtering by the core-based statistical area name (`cbsaname`)
+
+```{r}
+atlanta_fips <- us_xwalk %>% 
+  filter(str_detect(cbsaname, "Atlanta")) %>% 
+  pull(fips)
+```
+
+If more psecific areas are needed. State wide crosswalk files can be retrieved from `state_xwalk()`. This function requires a single parameter for the state abreviation. This dataset is disaggregated down to the block code. Loading this file does take a little while.
+
+```{r, eval=FALSE}
+ga_xwalk <- state_xwalk("ga")
+```
+
+## Collecting Commuter Flows
+
+```{r}
+atlanta_flows <- get_commuter_flow("ga") %>% 
+  aggregate_flow() %>% 
+  filter(w_fips %in% atlanta_fips | h_fips %in% atlanta_fips)
+
+atlanta_flows %>% glimpse()
+```  
+
+## Collecting Income Data from QCEW
+
+```{r}
+library(blscrapeR)
+
+atlanta_qcew <- atlanta_fips %>% 
+  map(~qcew_api(year=2017, qtr="A", slice="area", sliceCode=.x)) %>% 
+  reduce(rbind) %>% 
+  filter(agglvl_code == 70) #Code for total by county
+```
+
